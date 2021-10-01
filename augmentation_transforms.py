@@ -26,7 +26,7 @@ from PIL import ImageOps, ImageEnhance, ImageFilter, Image
 # pylint:enable=g-multiple-import
 
 
-IMAGE_SIZE = 32
+IMAGE_SIZE = 224
 # What is the dataset mean and std of the images on the training set
 MEANS = [0.49139968, 0.48215841, 0.44653091]
 STDS = [0.24703223, 0.24348513, 0.26158784]
@@ -156,7 +156,7 @@ def pil_wrap(img):
 
 def pil_unwrap(pil_img):
   """Converts the PIL img to a numpy array."""
-  pic_array = (np.array(pil_img.getdata()).reshape((32, 32, 4)) / 255.0)
+  pic_array = (np.array(pil_img.getdata()).reshape(IMAGE_SIZE, IMAGE_SIZE, 4) / 255.0)
   i1, i2 = np.where(pic_array[:, :, 3] == 0)
   pic_array = (pic_array[:, :, :3] - MEANS) / STDS
   pic_array[i1, i2] = [0, 0, 0]
@@ -287,7 +287,7 @@ def _shear_x_impl(pil_img, level):
   level = float_parameter(level, 0.3)
   if random.random() > 0.5:
     level = -level
-  return pil_img.transform((32, 32), Image.AFFINE, (1, level, 0, 0, 1, 0))
+  return pil_img.transform((IMAGE_SIZE, IMAGE_SIZE), Image.AFFINE, (1, level, 0, 0, 1, 0))
 
 
 shear_x = TransformT('ShearX', _shear_x_impl)
@@ -310,7 +310,7 @@ def _shear_y_impl(pil_img, level):
   level = float_parameter(level, 0.3)
   if random.random() > 0.5:
     level = -level
-  return pil_img.transform((32, 32), Image.AFFINE, (1, 0, 0, level, 1, 0))
+  return pil_img.transform((IMAGE_SIZE, IMAGE_SIZE), Image.AFFINE, (1, 0, 0, level, 1, 0))
 
 
 shear_y = TransformT('ShearY', _shear_y_impl)
@@ -333,7 +333,7 @@ def _translate_x_impl(pil_img, level):
   level = int_parameter(level, 10)
   if random.random() > 0.5:
     level = -level
-  return pil_img.transform((32, 32), Image.AFFINE, (1, 0, level, 0, 1, 0))
+  return pil_img.transform((IMAGE_SIZE, IMAGE_SIZE), Image.AFFINE, (1, 0, level, 0, 1, 0))
 
 
 translate_x = TransformT('TranslateX', _translate_x_impl)
@@ -356,7 +356,7 @@ def _translate_y_impl(pil_img, level):
   level = int_parameter(level, 10)
   if random.random() > 0.5:
     level = -level
-  return pil_img.transform((32, 32), Image.AFFINE, (1, 0, 0, 0, 1, level))
+  return pil_img.transform((IMAGE_SIZE, IMAGE_SIZE), Image.AFFINE, (1, 0, 0, 0, 1, level))
 
 
 translate_y = TransformT('TranslateY', _translate_y_impl)
@@ -398,7 +398,7 @@ def _cutout_pil_impl(pil_img, level):
   size = int_parameter(level, 20)
   if size <= 0:
     return pil_img
-  img_height, img_width, num_channels = (32, 32, 3)
+  img_height, img_width, num_channels = (IMAGE_SIZE, IMAGE_SIZE, 3)
   _, upper_coord, lower_coord = (
       create_cutout_mask(img_height, img_width, num_channels, size))
   pixels = pil_img.load()  # create the pixel map

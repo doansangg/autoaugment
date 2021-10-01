@@ -48,12 +48,22 @@ except ImportError:
 tf.flags.DEFINE_string('model_name', 'wrn',
                        'wrn, shake_shake_32, shake_shake_96, shake_shake_112, '
                        'pyramid_net')
-tf.flags.DEFINE_string('checkpoint_dir', 'cifar-10-binary/cifar-10-batches-py', 'Training Directory.')
-tf.flags.DEFINE_string('data_path', 'cifar-10-binary/cifar-10-batches-py',
-                       'Directory where dataset is located.')
+tf.flags.DEFINE_string('checkpoint_dir', 'checkpoint/checkpoint', 'Training Directory.')
+tf.flags.DEFINE_string('PATH_TRAIN', 'path_data/train.txt',
+                       'PATH TRAIN')
+tf.flags.DEFINE_string('PATH_TEST', 'path_data/test.txt',
+                       'PATH_TEST')
 tf.flags.DEFINE_string('dataset', 'cifar10',
-                       'Dataset to train with. Either cifar10 or cifar100')
-tf.flags.DEFINE_integer('use_cpu', 1, '1 if use CPU, else GPU.')
+                       'Dataset to train with. ')
+tf.flags.DEFINE_integer('width', 224,
+                       'Dataset to train width.')
+tf.flags.DEFINE_integer('height', 224,
+                       'Dataset to train heigth.')
+tf.flags.DEFINE_float('ration', 0.2,
+                       'Dataset to train ratio ')
+tf.flags.DEFINE_integer('n_class', 3,
+                       'Dataset to train with. ')
+tf.flags.DEFINE_integer('use_cpu', 0, '1 if use CPU, else GPU.')
 
 FLAGS = tf.flags.FLAGS
 
@@ -114,7 +124,7 @@ def build_model(inputs, num_classes, is_training, hparams):
   return logits
 
 
-class CifarModel(object):
+class C_Model(object):
   """Builds an image model for Cifar10/Cifar100."""
 
   def __init__(self, hparams):
@@ -126,13 +136,14 @@ class CifarModel(object):
     self.mode = mode
     self._setup_misc(mode)
     self._setup_images_and_labels()
+    # print("doansang: ",self.images)
     self._build_graph(self.images, self.labels, mode)
-
+    
     self.init = tf.group(tf.global_variables_initializer(),
                          tf.local_variables_initializer())
 
   def _setup_misc(self, mode):
-    """Sets up miscellaneous in the cifar model constructor."""
+    """Sets up miscellaneous in the custom model constructor."""
     self.lr_rate_ph = tf.Variable(0.0, name='lrn_rate', trainable=False)
     self.reuse = None if (mode == 'train') else True
     self.batch_size = self.hparams.batch_size
@@ -140,12 +151,10 @@ class CifarModel(object):
       self.batch_size = 25
 
   def _setup_images_and_labels(self):
-    """Sets up image and label placeholders for the cifar model."""
-    if FLAGS.dataset == 'cifar10':
-      self.num_classes = 10
-    else:
-      self.num_classes = 100
-    self.images = tf.placeholder(tf.float32, [self.batch_size, 32, 32, 3])
+    """Sets up image and label placeholders for the custom model."""
+    self.num_classes = FLAGS.n_class
+    self.images = tf.placeholder(tf.float32, [self.batch_size, FLAGS.width, FLAGS.height, 3])
+    #print(self.images)
     self.labels = tf.placeholder(tf.float32,
                                  [self.batch_size, self.num_classes])
 
@@ -153,7 +162,7 @@ class CifarModel(object):
     session.run(self._epoch_update, feed_dict={self._new_epoch: epoch_value})
 
   def _build_graph(self, images, labels, mode):
-    """Constructs the TF graph for the cifar model.
+    """Constructs the TF graph for the custom model.
 
     Args:
       images: A 4-D image Tensor
@@ -171,6 +180,7 @@ class CifarModel(object):
         self.hparams)
     self.predictions, self.cost = helper_utils.setup_loss(
         logits, labels)
+    
     self.accuracy, self.eval_op = tf.metrics.accuracy(
         tf.argmax(labels, 1), tf.argmax(self.predictions, 1))
     self._calc_num_trainable_params()
@@ -178,13 +188,13 @@ class CifarModel(object):
     # Adds L2 weight decay to the cost
     self.cost = helper_utils.decay_weights(self.cost,
                                            self.hparams.weight_decay_rate)
-
+    print("Loss: ",self.cost)
     if is_training:
       self._build_train_op()
 
     # Setup checkpointing for this child model
     # Keep 2 or more checkpoints around during training.
-    with tf.device('/cpu:0'):
+    with tf.device('/device:GPU:0'):
       self.saver = tf.train.Saver(max_to_keep=2)
 
     self.init = tf.group(tf.global_variables_initializer(),
@@ -198,7 +208,7 @@ class CifarModel(object):
         self.num_trainable_params))
 
   def _build_train_op(self):
-    """Builds the train op for the cifar model."""
+    """Builds the train op for the custom model."""
     hparams = self.hparams
     tvars = tf.trainable_variables()
     grads = tf.gradients(self.cost, tvars)
@@ -222,8 +232,8 @@ class CifarModel(object):
       self.train_op = tf.group(*train_ops)
 
 
-class CifarModelTrainer(object):
-  """Trains an instance of the CifarModel class."""
+class ModelTrainer(object):
+  """Trains an instance of the C_Model class."""
 
   def __init__(self, hparams):
     self._session = None
@@ -315,12 +325,12 @@ class CifarModelTrainer(object):
     # Determine if we should build the train and eval model. When using
     # distributed training we only want to build one or the other and not both.
     with tf.variable_scope('model', use_resource=False):
-      m = CifarModel(self.hparams)
+      m = C_Model (self.hparams)
       m.build('train')
       self._num_trainable_params = m.num_trainable_params
       self._saver = m.saver
     with tf.variable_scope('model', reuse=True, use_resource=False):
-      meval = CifarModel(self.hparams)
+      meval = C_Model(self.hparams)
       meval.build('eval')
     return m, meval
 
@@ -337,7 +347,7 @@ class CifarModelTrainer(object):
     return starting_epoch
 
   def _run_training_loop(self, m, curr_epoch):
-    """Trains the cifar model `m` for one epoch."""
+    """Trains the custom model `m` for one epoch."""
     start_time = time.time()
     while True:
       try:
@@ -370,7 +380,7 @@ class CifarModelTrainer(object):
 
     # Build the child graph
     with tf.Graph().as_default(), tf.device(
-        '/cpu:0' if FLAGS.use_cpu else '/gpu:0'):
+        '/device:GPU:0'):
       m, meval = self._build_models()
 
       # Figure out what epoch we are on
@@ -414,15 +424,17 @@ class CifarModelTrainer(object):
 
 
 def main(_):
-  if FLAGS.dataset not in ['cifar10', 'cifar100']:
-    raise ValueError('Invalid dataset: %s' % FLAGS.dataset)
   hparams = tf.contrib.training.HParams(
       train_size=50000,
-      validation_size=0,
-      eval_test=1,
-      dataset=FLAGS.dataset,
-      data_path=FLAGS.data_path,
-      batch_size=128,
+      validation_size=2,
+      eval_test=2,
+      path_train=FLAGS.PATH_TRAIN,
+      path_test=FLAGS.PATH_TEST,
+      n_class=FLAGS.n_class,
+      heigth=FLAGS.height,
+      width=FLAGS.width,
+      ration=FLAGS.ration,
+      batch_size=8,
       gradient_clipping_by_global_norm=5.0)
   if FLAGS.model_name == 'wrn':
     hparams.add_hparam('model_name', 'wrn')
@@ -456,7 +468,7 @@ def main(_):
     hparams.batch_size = 64
   else:
     raise ValueError('Not Valid Model Name: %s' % FLAGS.model_name)
-  cifar_trainer = CifarModelTrainer(hparams)
+  cifar_trainer = ModelTrainer(hparams)
   cifar_trainer.run_model()
 
 if __name__ == '__main__':
